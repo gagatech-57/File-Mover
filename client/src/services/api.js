@@ -1,5 +1,20 @@
 import { API_BASE_URL } from '../config/constants.js';
 
+/**
+ * Safely parse JSON response with HTML / empty body fallback
+ */
+async function parseJSON(res) {
+  const text = await res.text();
+  if (!text || text.trim().length === 0) {
+    return { message: `Server returned HTTP ${res.status} (Empty response)` };
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return { message: `Server error (${res.status}): ${text.substring(0, 120)}` };
+  }
+}
+
 export const api = {
   /**
    * Create a new temporary sharing session
@@ -10,7 +25,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expirationMinutes })
     });
-    const data = await res.json();
+    const data = await parseJSON(res);
     if (!res.ok) throw new Error(data.message || 'Failed to create session');
     return data;
   },
@@ -24,7 +39,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await parseJSON(res);
     if (!res.ok) throw new Error(data.message || 'Verification failed');
     return data;
   },
@@ -34,7 +49,7 @@ export const api = {
    */
   async getSessionStatus(sessionId) {
     const res = await fetch(`${API_BASE_URL}/sessions/${sessionId}/status`);
-    const data = await res.json();
+    const data = await parseJSON(res);
     if (!res.ok) throw new Error(data.message || 'Session status unavailable');
     return data;
   },
@@ -44,7 +59,7 @@ export const api = {
    */
   async getSessionFiles(sessionId) {
     const res = await fetch(`${API_BASE_URL}/sessions/${sessionId}/files`);
-    const data = await res.json();
+    const data = await parseJSON(res);
     if (!res.ok) throw new Error(data.message || 'Failed to fetch session files');
     return data;
   },
@@ -56,7 +71,7 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/sessions/${sessionId}/regenerate-qr`, {
       method: 'POST'
     });
-    const data = await res.json();
+    const data = await parseJSON(res);
     if (!res.ok) throw new Error(data.message || 'Failed to regenerate QR token');
     return data;
   },
@@ -68,7 +83,7 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/sessions/${sessionId}/close`, {
       method: 'POST'
     });
-    return await res.json();
+    return await parseJSON(res);
   },
 
   /**
