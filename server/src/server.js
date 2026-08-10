@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { config } from './config/env.js';
@@ -59,10 +60,20 @@ app.use('/api/sessions', fileRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
-    service: 'FileShare Engine with MongoDB Atlas',
+    service: 'File Mover Engine with MongoDB Atlas',
     timestamp: new Date().toISOString()
   });
 });
+
+// Serve static React client files in production
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.resolve(clientDistPath, 'index.html'));
+  });
+}
 
 // Global Error Middleware
 app.use(errorHandler);
@@ -77,7 +88,7 @@ startCleanupTask();
 connectDB().then(() => {
   server.listen(config.PORT, () => {
     console.log(`=======================================================`);
-    console.log(`🚀 FileShare Server running on http://localhost:${config.PORT}`);
+    console.log(`🚀 File Mover Server running on http://localhost:${config.PORT}`);
     console.log(`🍃 MongoDB Atlas connected (Auto-TTL session expiry)`);
     console.log(`⏱️  Session Expiration: ${config.SESSION_EXPIRATION_MINUTES} mins`);
     console.log(`🔒 Security: Zero Accounts | Ephemeral Database Model`);
