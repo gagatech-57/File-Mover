@@ -6,7 +6,7 @@ import { CodeDisplay } from '../components/CodeDisplay.jsx';
 import { QRCodeDisplay } from '../components/QRCodeDisplay.jsx';
 import { FilePicker } from '../components/FilePicker.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
-import { CheckCircle2, Loader2, Send, Users, PlusCircle, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { CheckCircle2, Loader2, Send, Users, PlusCircle, AlertCircle, RefreshCw, Zap, WifiOff } from 'lucide-react';
 
 export function SenderPage({ showToast, onReset }) {
   const [session, setSession] = useState(null);
@@ -32,6 +32,12 @@ export function SenderPage({ showToast, onReset }) {
     try {
       setIsInitializing(true);
       setInitError(null);
+
+      // Check if browser is offline
+      if (!navigator.onLine) {
+        throw new Error('Your browser is currently Offline. Please check your internet connection or turn off DevTools Offline mode.');
+      }
+
       const res = await api.createSession(20);
 
       if (!res || !res.sessionId) {
@@ -90,8 +96,13 @@ export function SenderPage({ showToast, onReset }) {
       setIsInitializing(false);
     } catch (err) {
       console.error('[Sender] Init error:', err);
-      setInitError(err.message || 'Failed to initialize sharing session');
-      showToast(err.message || 'Failed to initialize session', 'error');
+      const isNetworkErr = !navigator.onLine || err.message?.includes('fetch') || err.message?.includes('INTERNET_DISCONNECTED');
+      const friendlyMsg = isNetworkErr
+        ? 'Internet Connection Disconnected 🌐. Please turn off DevTools "Offline" mode or connect to internet, then click Retry.'
+        : (err.message || 'Failed to initialize sharing session');
+      
+      setInitError(friendlyMsg);
+      showToast(friendlyMsg, 'error');
       setIsInitializing(false);
     }
   };
@@ -99,7 +110,15 @@ export function SenderPage({ showToast, onReset }) {
   useEffect(() => {
     initSenderSession();
 
+    // Listen for online event
+    const handleOnline = () => {
+      if (!session) initSenderSession();
+    };
+
+    window.addEventListener('online', handleOnline);
+
     return () => {
+      window.removeEventListener('online', handleOnline);
       if (webrtcRef.current) {
         webrtcRef.current.destroy();
       }
@@ -248,12 +267,19 @@ export function SenderPage({ showToast, onReset }) {
   }
 
   if (initError || !session) {
+    const isOffline = !navigator.onLine || initError?.includes('Offline') || initError?.includes('Disconnected');
     return (
       <div style={{ maxWidth: '600px', margin: '60px auto', padding: '0 16px', textAlign: 'center' }}>
         <div className="glass-card" style={{ padding: '30px 20px' }}>
-          <AlertCircle size={56} color="var(--danger)" style={{ marginBottom: '16px' }} />
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '10px' }}>Session Connection Error</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+          {isOffline ? (
+            <WifiOff size={56} color="var(--danger)" style={{ marginBottom: '16px' }} />
+          ) : (
+            <AlertCircle size={56} color="var(--danger)" style={{ marginBottom: '16px' }} />
+          )}
+          <h2 style={{ fontSize: '1.6rem', marginBottom: '10px' }}>
+            {isOffline ? 'Internet Connection Disconnected' : 'Session Connection Error'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '24px', lineHeight: '1.6' }}>
             {initError || 'Unable to connect to the File Mover backend server.'}
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
