@@ -5,11 +5,12 @@ import { CodeDisplay } from '../components/CodeDisplay.jsx';
 import { QRCodeDisplay } from '../components/QRCodeDisplay.jsx';
 import { FilePicker } from '../components/FilePicker.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
-import { CheckCircle2, Loader2, Send, Users, PlusCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Send, Users, PlusCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function SenderPage({ showToast, onReset }) {
   const [session, setSession] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initError, setInitError] = useState(null);
   const [receiverConnected, setReceiverConnected] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   
@@ -21,55 +22,63 @@ export function SenderPage({ showToast, onReset }) {
   const [isComplete, setIsComplete] = useState(false);
   const [totalFilesSent, setTotalFilesSent] = useState(0);
 
+  const initSenderSession = async () => {
+    let socketInstance = null;
+    try {
+      setIsInitializing(true);
+      setInitError(null);
+      const res = await api.createSession(20);
+
+      if (!res || !res.sessionId) {
+        throw new Error('Server returned invalid session data');
+      }
+
+      setSession(res);
+
+      // Connect Socket.IO
+      socketInstance = connectSocket();
+      
+      socketInstance.emit('join_session', {
+        sessionId: res.sessionId,
+        role: 'SENDER',
+        authToken: res.authToken
+      });
+
+      socketInstance.on('peer_connected', (data) => {
+        if (data.receiverConnected || data.role === 'RECEIVER') {
+          setReceiverConnected(true);
+          showToast('Receiver Connected ✓', 'success');
+        }
+      });
+
+      socketInstance.on('session_state', (data) => {
+        if (data.receiverConnected) {
+          setReceiverConnected(true);
+        }
+      });
+
+      socketInstance.on('peer_disconnected', (data) => {
+        if (data.role === 'RECEIVER') {
+          setReceiverConnected(false);
+          showToast('Receiver disconnected. Waiting for a new receiver...', 'info');
+        }
+      });
+
+      setIsInitializing(false);
+    } catch (err) {
+      console.error('[Sender] Init error:', err);
+      setInitError(err.message || 'Failed to initialize sharing session');
+      showToast(err.message || 'Failed to initialize session', 'error');
+      setIsInitializing(false);
+    }
+  };
+
   // Auto-initialize Sender session on page load
   useEffect(() => {
-    let socketInstance = null;
-
-    async function initSenderSession() {
-      try {
-        setIsInitializing(true);
-        const res = await api.createSession(20);
-        setSession(res);
-
-        // Connect Socket.IO
-        socketInstance = connectSocket();
-        
-        socketInstance.emit('join_session', {
-          sessionId: res.sessionId,
-          role: 'SENDER',
-          authToken: res.authToken
-        });
-
-        socketInstance.on('peer_connected', (data) => {
-          if (data.receiverConnected || data.role === 'RECEIVER') {
-            setReceiverConnected(true);
-            showToast('Receiver Connected ✓', 'success');
-          }
-        });
-
-        socketInstance.on('session_state', (data) => {
-          if (data.receiverConnected) {
-            setReceiverConnected(true);
-          }
-        });
-
-        socketInstance.on('peer_disconnected', (data) => {
-          if (data.role === 'RECEIVER') {
-            setReceiverConnected(false);
-            showToast('Receiver disconnected. Waiting for a new receiver...', 'info');
-          }
-        });
-
-        setIsInitializing(false);
-      } catch (err) {
-        showToast(err.message || 'Failed to initialize session', 'error');
-        setIsInitializing(false);
-      }
-    }
-
     initSenderSession();
 
     return () => {
+      const socketInstance = connectSocket();
       if (socketInstance) {
         socketInstance.off('peer_connected');
         socketInstance.off('session_state');
@@ -183,6 +192,28 @@ export function SenderPage({ showToast, onReset }) {
     );
   }
 
+  if (initError || !session) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
+        <div className="glass-card" style={{ padding: '40px' }}>
+          <AlertCircle size={56} color="var(--danger)" style={{ marginBottom: '16px' }} />
+          <h2 style={{ fontSize: '1.6rem', marginBottom: '10px' }}>Session Connection Error</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+            {initError || 'Unable to connect to the File Mover backend server.'}
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={initSenderSession}>
+              <RefreshCw size={18} /> Retry Connection
+            </button>
+            <button className="btn btn-secondary" onClick={onReset}>
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Determine current active step
   const activeStep = isComplete ? 4 : isTransferring ? 4 : receiverConnected ? 3 : 2;
 
@@ -235,10 +266,10 @@ export function SenderPage({ showToast, onReset }) {
             </div>
           </div>
 
-          <CodeDisplay codes={session.codes} showToast={showToast} />
+          <CodeDisplay codes={session?.codes || []} showToast={showToast} />
           
           <QRCodeDisplay
-            qrToken={session.qrToken}
+            qrToken={session?.qrToken || ''}
             onRegenerateQR={handleRegenerateQR}
             showToast={showToast}
           />

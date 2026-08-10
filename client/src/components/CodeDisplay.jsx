@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 
-export function CodeDisplay({ codes, showToast }) {
+export function CodeDisplay({ codes = [], showToast }) {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  const safeCodes = Array.isArray(codes) ? codes : [];
+
   const handleCopySingle = (code, index) => {
+    if (!code) return;
     navigator.clipboard.writeText(code);
     setCopiedIndex(index);
     if (showToast) showToast(`Code ${index + 1} copied!`, 'success');
@@ -13,12 +16,21 @@ export function CodeDisplay({ codes, showToast }) {
   };
 
   const handleCopyAll = () => {
-    const fullText = codes.join(' ');
+    if (safeCodes.length === 0) return;
+    const fullText = safeCodes.join(' ');
     navigator.clipboard.writeText(fullText);
     setCopiedAll(true);
-    if (showToast) showToast('All 3 verification codes copied!', 'success');
+    if (showToast) showToast('All verification codes copied!', 'success');
     setTimeout(() => setCopiedAll(false), 2000);
   };
+
+  if (safeCodes.length === 0) {
+    return (
+      <div style={{ margin: '20px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <p>Connecting to backend engine...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ margin: '20px 0', textAlign: 'center' }}>
@@ -39,7 +51,7 @@ export function CodeDisplay({ codes, showToast }) {
       </div>
 
       <div className="codes-grid">
-        {codes.map((code, idx) => (
+        {safeCodes.map((code, idx) => (
           <div key={idx} style={{ position: 'relative' }}>
             <div style={{
               fontSize: '0.75rem',
