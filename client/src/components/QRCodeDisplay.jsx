@@ -19,7 +19,7 @@ export function QRCodeDisplay({ qrToken, onRegenerateQR, showToast }) {
           width: 220,
           margin: 2,
           color: {
-            dark: '#0f172a',
+            dark: '#1c1b1f',
             light: '#ffffff'
           }
         },
@@ -48,11 +48,12 @@ export function QRCodeDisplay({ qrToken, onRegenerateQR, showToast }) {
   return (
     <div style={{
       textAlign: 'center',
-      padding: '24px',
+      padding: '24px 16px',
       background: 'rgba(255, 255, 255, 0.03)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--border)',
-      margin: '20px 0'
+      margin: '20px 0',
+      width: '100%'
     }}>
       <div style={{
         display: 'flex',
@@ -69,8 +70,8 @@ export function QRCodeDisplay({ qrToken, onRegenerateQR, showToast }) {
         <span>Scan QR Code to Connect</span>
       </div>
 
-      <div className="qr-wrapper">
-        <canvas ref={canvasRef} />
+      <div className="qr-wrapper" style={{ display: 'inline-block', maxWidth: '100%' }}>
+        <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
       </div>
 
       <div style={{

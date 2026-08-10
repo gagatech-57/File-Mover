@@ -6,12 +6,12 @@ export function Navbar({ onReset, sessionStatus, role }) {
     <header className="navbar">
       <a href="/" onClick={(e) => { e.preventDefault(); if (onReset) onReset(); }} className="brand-logo">
         <div className="brand-icon">
-          <FolderOutput size={24} color="white" />
+          <FolderOutput size={22} color="white" />
         </div>
         <span>File<span className="gradient-text"> Mover</span></span>
       </a>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {sessionStatus && (
           <div className={`status-pill ${sessionStatus === 'CONNECTED' || sessionStatus === 'COMPLETED' ? 'connected' : 'waiting'}`}>
             <span className="pulse-dot"></span>
@@ -19,14 +19,14 @@ export function Navbar({ onReset, sessionStatus, role }) {
               {sessionStatus === 'CONNECTED' ? 'Receiver Connected ✓' : 
                sessionStatus === 'TRANSFERRING' ? 'Moving Files...' : 
                sessionStatus === 'COMPLETED' ? 'Transfer Complete ✓' : 
-               'Waiting for Peer...'}
+               'Waiting...'}
             </span>
           </div>
         )}
 
-        <div className="status-pill">
+        <div className="status-pill nav-shield-pill">
           <Shield size={14} color="var(--primary)" />
-          <span>No Accounts • Temporary</span>
+          <span>No Accounts</span>
         </div>
 
         {onReset && role && (

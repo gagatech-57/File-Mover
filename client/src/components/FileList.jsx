@@ -18,7 +18,7 @@ export function FileList({ sessionId, files }) {
   const downloadAllUrl = api.getDownloadAllZipUrl(sessionId);
 
   return (
-    <div style={{ marginTop: '24px' }}>
+    <div style={{ marginTop: '24px', width: '100%' }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -54,12 +54,14 @@ export function FileList({ sessionId, files }) {
           const downloadUrl = api.getDownloadSingleUrl(sessionId, file.id);
           return (
             <div key={file.id} className="file-item">
-              <div className="file-info">
-                <div className="file-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)' }}>
+              <div className="file-info" style={{ minWidth: 0, flex: 1 }}>
+                <div className="file-icon" style={{ background: 'rgba(46, 125, 50, 0.15)', color: 'var(--success)', flexShrink: 0 }}>
                   <Download size={20} />
                 </div>
-                <div>
-                  <div className="file-name">{file.originalName || file.name}</div>
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <div className="file-name" title={file.originalName || file.name}>
+                    {file.originalName || file.name}
+                  </div>
                   <div className="file-size">{formatBytes(file.size)}</div>
                 </div>
               </div>
@@ -68,7 +70,7 @@ export function FileList({ sessionId, files }) {
                 href={downloadUrl}
                 download
                 className="btn btn-secondary btn-sm"
-                style={{ textDecoration: 'none' }}
+                style={{ textDecoration: 'none', flexShrink: 0 }}
               >
                 <Download size={14} /> Download
               </a>
