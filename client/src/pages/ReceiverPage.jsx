@@ -6,7 +6,7 @@ import { CodeInput } from '../components/CodeInput.jsx';
 import { QRScannerModal } from '../components/QRScannerModal.jsx';
 import { FileList } from '../components/FileList.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
-import { QrCode, KeyRound, CheckCircle2, Clock, AlertTriangle, Zap } from 'lucide-react';
+import { QrCode, KeyRound, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 
 /**
  * Helper to trigger automatic browser download for incoming files
@@ -211,7 +211,7 @@ export function ReceiverPage({ showToast, onReset }) {
   };
 
   return (
-    <div style={{ maxWidth: '700px', margin: '40px auto', padding: '0 20px', width: '100%' }}>
+    <div style={{ maxWidth: '700px', margin: '40px auto', padding: '0 16px', width: '100%' }}>
       {!connectedSession ? (
         /* CONNECT SCREEN: CODE ENTRY OR QR SCAN */
         <div className="glass-card" style={{ padding: '36px' }}>
@@ -330,21 +330,23 @@ export function ReceiverPage({ showToast, onReset }) {
             justifyContent: 'space-between',
             paddingBottom: '20px',
             borderBottom: '1px solid var(--border)',
-            marginBottom: '24px'
+            marginBottom: '24px',
+            flexWrap: 'wrap',
+            gap: '12px'
           }}>
-            <div>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={24} color="var(--success)" />
-                <h2 style={{ fontSize: '1.6rem' }}>CONNECTED ✓</h2>
+                <CheckCircle2 size={24} color="var(--success)" style={{ flexShrink: 0 }} />
+                <h2 style={{ fontSize: 'clamp(1.2rem, 4vw, 1.6rem)', whiteSpace: 'nowrap' }}>CONNECTED ✓</h2>
               </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '4px', wordBreak: 'break-all' }}>
                 Session: {connectedSession.sessionId}
               </p>
             </div>
 
-            <div className={`status-pill ${senderConnected ? 'connected' : 'waiting'}`}>
+            <div className={`status-pill ${senderConnected ? 'connected' : 'waiting'}`} style={{ flexShrink: 0 }}>
               <Clock size={14} />
-              <span>{senderConnected ? 'Sender Online' : 'Sender Disconnected'}</span>
+              <span>{senderConnected ? 'Sender Online' : 'Disconnected'}</span>
             </div>
           </div>
 

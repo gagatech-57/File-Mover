@@ -249,14 +249,14 @@ export function SenderPage({ showToast, onReset }) {
 
   if (initError || !session) {
     return (
-      <div style={{ maxWidth: '600px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
-        <div className="glass-card" style={{ padding: '40px' }}>
+      <div style={{ maxWidth: '600px', margin: '60px auto', padding: '0 16px', textAlign: 'center' }}>
+        <div className="glass-card" style={{ padding: '30px 20px' }}>
           <AlertCircle size={56} color="var(--danger)" style={{ marginBottom: '16px' }} />
           <h2 style={{ fontSize: '1.6rem', marginBottom: '10px' }}>Session Connection Error</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
             {initError || 'Unable to connect to the File Mover backend server.'}
           </p>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={initSenderSession}>
               <RefreshCw size={18} /> Retry Connection
             </button>
@@ -273,7 +273,7 @@ export function SenderPage({ showToast, onReset }) {
   const activeStep = isComplete ? 4 : isTransferring ? 4 : receiverConnected ? 3 : 2;
 
   return (
-    <div style={{ maxWidth: '750px', margin: '40px auto', padding: '0 20px', width: '100%' }}>
+    <div style={{ maxWidth: '750px', margin: '40px auto', padding: '0 16px', width: '100%' }}>
       {/* Wizard Header Steps */}
       <div className="steps-container">
         <div className={`step-item completed`}>
@@ -306,18 +306,20 @@ export function SenderPage({ showToast, onReset }) {
             justifyContent: 'space-between',
             paddingBottom: '16px',
             borderBottom: '1px solid var(--border)',
-            marginBottom: '20px'
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+            gap: '12px'
           }}>
             <div>
-              <h2 style={{ fontSize: '1.4rem' }}>Sharing Credentials</h2>
+              <h2 style={{ fontSize: 'clamp(1.2rem, 4vw, 1.4rem)' }}>Sharing Credentials</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 Share these 3 codes or let the Receiver scan the QR code.
               </p>
             </div>
 
-            <div className={`status-pill ${receiverConnected ? 'connected' : 'waiting'}`}>
+            <div className={`status-pill ${receiverConnected ? 'connected' : 'waiting'}`} style={{ flexShrink: 0 }}>
               <Users size={16} />
-              <span>{receiverConnected ? 'Receiver Connected ✓' : 'Waiting for receiver...'}</span>
+              <span>{receiverConnected ? 'Connected ✓' : 'Waiting...'}</span>
             </div>
           </div>
 
