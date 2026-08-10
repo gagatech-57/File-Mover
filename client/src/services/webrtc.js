@@ -1,6 +1,6 @@
 /**
  * WebRTC DataChannel Manager for High-Speed File Transfer
- * Uses 64 KB chunking with active backpressure control (bufferedAmountLowThreshold)
+ * Uses progressive chunking (64 KB / 128 KB / 256 KB) with active backpressure control (bufferedAmountLowThreshold)
  */
 
 const RTC_CONFIG = {
@@ -13,9 +13,6 @@ const RTC_CONFIG = {
   ]
 };
 
-const CHUNK_SIZE = 64 * 1024; // 64 KB per chunk
-const HIGH_WATERMARK = 128 * 1024; // 128 KB backpressure limit
-
 export class WebRTCManager {
   constructor(socket, sessionId, role) {
     this.socket = socket;
@@ -26,6 +23,11 @@ export class WebRTCManager {
     this.dataChannel = null;
     this.connectionType = 'Connecting...';
     this.isChannelOpen = false;
+
+    // Configurable chunk size (Default 64 KB, benchmarkable up to 256 KB)
+    this.chunkSize = 64 * 1024;
+    this.highWatermark = 128 * 1024;
+    this.isCancelled = false;
 
     // Callbacks
     this.onProgress = null;
@@ -39,6 +41,14 @@ export class WebRTCManager {
 
     this.initPeerConnection();
     this.setupSocketListeners();
+  }
+
+  setChunkSize(bytes) {
+    this.chunkSize = bytes;
+    this.highWatermark = bytes * 2;
+    if (this.dataChannel) {
+      this.dataChannel.bufferedAmountLowThreshold = bytes;
+    }
   }
 
   initPeerConnection() {
@@ -81,7 +91,7 @@ export class WebRTCManager {
 
   setupDataChannel(channel) {
     channel.binaryType = 'arraybuffer';
-    channel.bufferedAmountLowThreshold = CHUNK_SIZE;
+    channel.bufferedAmountLowThreshold = this.chunkSize;
 
     channel.onopen = () => {
       console.log('[WebRTC DataChannel] Open ✓');
@@ -181,6 +191,21 @@ export class WebRTCManager {
   }
 
   /**
+   * Cancel ongoing transfer
+   */
+  cancelTransfer() {
+    this.isCancelled = true;
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      try {
+        this.dataChannel.send(JSON.stringify({ type: 'cancel_transfer' }));
+      } catch (err) {}
+    }
+    this.currentReceivingFile = null;
+    this.receivedChunks = [];
+    this.receivedBytes = 0;
+  }
+
+  /**
    * Send file over WebRTC DataChannel with Backpressure Control
    */
   async sendFile(file) {
@@ -188,6 +213,7 @@ export class WebRTCManager {
       throw new Error('WebRTC DataChannel is not open');
     }
 
+    this.isCancelled = false;
     const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const totalBytes = file.size;
 
@@ -205,8 +231,12 @@ export class WebRTCManager {
     const startTime = Date.now();
 
     while (offset < totalBytes) {
-      // BACKPRESSURE CONTROL: Pause if channel buffer is full
-      if (this.dataChannel.bufferedAmount > HIGH_WATERMARK) {
+      if (this.isCancelled) {
+        throw new Error('Transfer cancelled by user');
+      }
+
+      // BACKPRESSURE CONTROL: Pause if channel buffer exceeds high watermark
+      if (this.dataChannel.bufferedAmount > this.highWatermark) {
         await new Promise((resolve) => {
           this.dataChannel.onbufferedamountlow = () => {
             this.dataChannel.onbufferedamountlow = null;
@@ -215,7 +245,7 @@ export class WebRTCManager {
         });
       }
 
-      const chunkSlice = file.slice(offset, offset + CHUNK_SIZE);
+      const chunkSlice = file.slice(offset, offset + this.chunkSize);
       const arrayBuffer = await chunkSlice.arrayBuffer();
 
       this.dataChannel.send(arrayBuffer);
@@ -271,6 +301,10 @@ export class WebRTCManager {
           this.receivedChunks = [];
           this.receivedBytes = 0;
           this.receiveStartTime = Date.now();
+        } else if (msg.type === 'cancel_transfer') {
+          this.currentReceivingFile = null;
+          this.receivedChunks = [];
+          this.receivedBytes = 0;
         } else if (msg.type === 'file_end') {
           if (this.currentReceivingFile) {
             const blob = new Blob(this.receivedChunks, {
