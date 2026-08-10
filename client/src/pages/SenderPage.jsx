@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api.js';
 import { connectSocket } from '../services/socket.js';
+import { WebRTCManager } from '../services/webrtc.js';
 import { CodeDisplay } from '../components/CodeDisplay.jsx';
 import { QRCodeDisplay } from '../components/QRCodeDisplay.jsx';
 import { FilePicker } from '../components/FilePicker.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
-import { CheckCircle2, Loader2, Send, Users, PlusCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Loader2, Send, Users, PlusCircle, AlertCircle, RefreshCw, Zap } from 'lucide-react';
 
 export function SenderPage({ showToast, onReset }) {
   const [session, setSession] = useState(null);
@@ -21,6 +22,10 @@ export function SenderPage({ showToast, onReset }) {
   const [currentFileName, setCurrentFileName] = useState('');
   const [isComplete, setIsComplete] = useState(false);
   const [totalFilesSent, setTotalFilesSent] = useState(0);
+
+  // WebRTC State
+  const [connectionType, setConnectionType] = useState('WebRTC Connecting...');
+  const webrtcRef = useRef(null);
 
   const initSenderSession = async () => {
     let socketInstance = null;
@@ -44,16 +49,34 @@ export function SenderPage({ showToast, onReset }) {
         authToken: res.authToken
       });
 
+      // Initialize WebRTC Manager
+      const rtcManager = new WebRTCManager(socketInstance, res.sessionId, 'SENDER');
+      webrtcRef.current = rtcManager;
+
+      rtcManager.onChannelStateChange = (isOpen) => {
+        if (isOpen) {
+          setConnectionType(rtcManager.connectionType);
+          showToast('WebRTC DataChannel Connected ⚡ (Ultra-Fast P2P Ready)', 'success');
+        }
+      };
+
       socketInstance.on('peer_connected', (data) => {
         if (data.receiverConnected || data.role === 'RECEIVER') {
           setReceiverConnected(true);
           showToast('Receiver Connected ✓', 'success');
+          // Sender initiates WebRTC offer
+          setTimeout(() => {
+            rtcManager.createOffer();
+          }, 300);
         }
       });
 
       socketInstance.on('session_state', (data) => {
         if (data.receiverConnected) {
           setReceiverConnected(true);
+          setTimeout(() => {
+            rtcManager.createOffer();
+          }, 300);
         }
       });
 
@@ -73,11 +96,13 @@ export function SenderPage({ showToast, onReset }) {
     }
   };
 
-  // Auto-initialize Sender session on page load
   useEffect(() => {
     initSenderSession();
 
     return () => {
+      if (webrtcRef.current) {
+        webrtcRef.current.destroy();
+      }
       const socketInstance = connectSocket();
       if (socketInstance) {
         socketInstance.off('peer_connected');
@@ -96,6 +121,9 @@ export function SenderPage({ showToast, onReset }) {
         const statusRes = await api.getSessionStatus(session.sessionId);
         if (statusRes.receiverConnected) {
           setReceiverConnected(true);
+          if (webrtcRef.current) {
+            webrtcRef.current.createOffer();
+          }
         }
       } catch (err) {}
     }, 2000);
@@ -126,6 +154,7 @@ export function SenderPage({ showToast, onReset }) {
       setIsComplete(false);
 
       const socket = connectSocket();
+      const rtc = webrtcRef.current;
 
       // Signal transfer start to Receiver
       socket.emit('transfer_start', {
@@ -134,44 +163,70 @@ export function SenderPage({ showToast, onReset }) {
         totalBytes: selectedFiles.reduce((acc, f) => acc + f.size, 0)
       });
 
-      setCurrentFileName(selectedFiles[0].name);
+      const processedFiles = [];
 
-      // Perform upload
-      const response = await api.uploadFiles(
-        session.sessionId,
-        session.authToken,
-        selectedFiles,
-        (progress) => {
-          setTransferProgress(progress.percent);
-          setTransferSpeed(progress.speed);
+      // Primary Attempt: Transfer over direct WebRTC DataChannel if open
+      if (rtc && rtc.isChannelOpen) {
+        setConnectionType(rtc.connectionType);
+        rtc.onProgress = (prog) => {
+          setTransferProgress(prog.percent);
+          setTransferSpeed(prog.speed);
+          setCurrentFileName(prog.fileName);
+        };
 
-          // Emit realtime progress to socket room
-          socket.emit('transfer_progress', {
-            sessionId: session.sessionId,
-            fileId: 'file_active',
-            bytesTransferred: progress.loaded,
-            totalBytes: progress.total,
-            speed: progress.speed,
-            percent: progress.percent
+        for (const file of selectedFiles) {
+          setCurrentFileName(file.name);
+          const result = await rtc.sendFile(file);
+          processedFiles.push({
+            id: result.id,
+            originalName: file.name,
+            size: file.size
           });
         }
-      );
+      } else {
+        // Fallback: Upload via HTTP server endpoint if WebRTC DataChannel is blocked
+        setConnectionType('HTTP Server Fallback');
+        showToast('WebRTC DataChannel unavailable, using HTTP Server fallback...', 'info');
 
-      const allFiles = response.files || [];
-      const newFiles = response.newFiles || response.files || [];
+        setCurrentFileName(selectedFiles[0].name);
 
-      // Signal complete with both new files and accumulated session files
+        const response = await api.uploadFiles(
+          session.sessionId,
+          session.authToken,
+          selectedFiles,
+          (progress) => {
+            setTransferProgress(progress.percent);
+            setTransferSpeed(progress.speed);
+
+            socket.emit('transfer_progress', {
+              sessionId: session.sessionId,
+              fileId: 'file_active',
+              bytesTransferred: progress.loaded,
+              totalBytes: progress.total,
+              speed: progress.speed,
+              percent: progress.percent
+            });
+          }
+        );
+
+        if (response && response.files) {
+          processedFiles.push(...response.files);
+        }
+      }
+
+      // Signal completion to room peers
       socket.emit('transfer_complete', {
         sessionId: session.sessionId,
-        newFiles,
-        files: allFiles
+        newFiles: processedFiles,
+        files: processedFiles
       });
 
       setIsTransferring(false);
       setIsComplete(true);
-      setTotalFilesSent(allFiles.length);
-      showToast(`${selectedFiles.length} file(s) sent! Cumulative total: ${allFiles.length} file(s) ✓`, 'success');
+      setTotalFilesSent(processedFiles.length);
+      showToast(`${selectedFiles.length} file(s) sent via ${connectionType} ✓`, 'success');
     } catch (err) {
+      console.error('[Sender] Send error:', err);
       setIsTransferring(false);
       showToast(err.message || 'Transfer failed', 'error');
     }
@@ -298,8 +353,8 @@ export function SenderPage({ showToast, onReset }) {
                 onClick={handleSendFiles}
                 style={{ width: '100%', marginTop: '24px' }}
               >
-                <Send size={20} />
-                SEND {selectedFiles.length} FILE(S) NOW
+                <Zap size={20} />
+                SEND {selectedFiles.length} FILE(S) VIA WEBRTC PEER-TO-PEER
               </button>
             )}
           </div>
@@ -327,7 +382,7 @@ export function SenderPage({ showToast, onReset }) {
             <CheckCircle2 size={56} color="var(--success)" style={{ marginBottom: '16px' }} />
             <h3 style={{ fontSize: '1.6rem', marginBottom: '8px' }}>TRANSFER COMPLETE ✓</h3>
             <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-              {totalFilesSent} total file(s) successfully delivered to Receiver.
+              {totalFilesSent} total file(s) successfully delivered via {connectionType}.
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>

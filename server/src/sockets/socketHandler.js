@@ -57,6 +57,30 @@ export function initializeSocketHandlers(io) {
     });
 
     /**
+     * WebRTC Signaling: Relay SDP Offer from Sender or Receiver
+     */
+    socket.on('webrtc_offer', ({ sessionId, offer }) => {
+      const roomName = `session:${sessionId}`;
+      socket.to(roomName).emit('webrtc_offer', { offer, senderSocketId: socket.id });
+    });
+
+    /**
+     * WebRTC Signaling: Relay SDP Answer
+     */
+    socket.on('webrtc_answer', ({ sessionId, answer }) => {
+      const roomName = `session:${sessionId}`;
+      socket.to(roomName).emit('webrtc_answer', { answer, senderSocketId: socket.id });
+    });
+
+    /**
+     * WebRTC Signaling: Relay ICE Candidate
+     */
+    socket.on('webrtc_ice_candidate', ({ sessionId, candidate }) => {
+      const roomName = `session:${sessionId}`;
+      socket.to(roomName).emit('webrtc_ice_candidate', { candidate, senderSocketId: socket.id });
+    });
+
+    /**
      * Signal transfer initiation from Sender
      */
     socket.on('transfer_start', async ({ sessionId, fileList, totalBytes }) => {
@@ -90,7 +114,7 @@ export function initializeSocketHandlers(io) {
     /**
      * Transfer completion event
      */
-    socket.on('transfer_complete', async ({ sessionId, files }) => {
+    socket.on('transfer_complete', async ({ sessionId, files, newFiles }) => {
       const session = await sessionStore.getSession(sessionId);
       if (session) {
         session.status = 'COMPLETED';
@@ -99,6 +123,7 @@ export function initializeSocketHandlers(io) {
       const roomName = `session:${sessionId}`;
       io.to(roomName).emit('transfer_complete', {
         files,
+        newFiles,
         timestamp: Date.now()
       });
     });

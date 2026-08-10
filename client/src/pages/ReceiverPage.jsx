@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api.js';
 import { connectSocket } from '../services/socket.js';
+import { WebRTCManager } from '../services/webrtc.js';
 import { CodeInput } from '../components/CodeInput.jsx';
 import { QRScannerModal } from '../components/QRScannerModal.jsx';
 import { FileList } from '../components/FileList.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
-import { QrCode, KeyRound, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { QrCode, KeyRound, CheckCircle2, Clock, AlertTriangle, Zap } from 'lucide-react';
 
 /**
  * Helper to trigger automatic browser download for incoming files
@@ -31,14 +32,14 @@ function triggerBatchAutoDownloads(sessionId, filesToDownload) {
 
   filesToDownload.forEach((file, index) => {
     setTimeout(() => {
-      const url = api.getDownloadSingleUrl(sessionId, file.id);
+      const url = file.url || api.getDownloadSingleUrl(sessionId, file.id);
       triggerAutoDownload(url, file.originalName || file.name);
-    }, index * 400); // 400ms staggering
+    }, index * 400);
   });
 }
 
 export function ReceiverPage({ showToast, onReset }) {
-  const [activeTab, setActiveTab] = useState('CODES'); // 'CODES' | 'QR'
+  const [activeTab, setActiveTab] = useState('CODES');
   const [codes, setCodes] = useState(['', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -55,6 +56,10 @@ export function ReceiverPage({ showToast, onReset }) {
   const [receivedFiles, setReceivedFiles] = useState([]);
   const [isComplete, setIsComplete] = useState(false);
 
+  // WebRTC State
+  const [connectionType, setConnectionType] = useState('WebRTC Connecting...');
+  const webrtcRef = useRef(null);
+
   // Auto-connect if qrToken parameter is present in URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -63,6 +68,12 @@ export function ReceiverPage({ showToast, onReset }) {
     if (qrTokenFromUrl) {
       handleVerify({ qrToken: qrTokenFromUrl });
     }
+
+    return () => {
+      if (webrtcRef.current) {
+        webrtcRef.current.destroy();
+      }
+    };
   }, []);
 
   const handleVerify = async (payload) => {
@@ -91,6 +102,41 @@ export function ReceiverPage({ showToast, onReset }) {
         role: 'RECEIVER',
         authToken: res.authToken
       });
+
+      // Initialize WebRTC Manager
+      const rtcManager = new WebRTCManager(socket, res.sessionId, 'RECEIVER');
+      webrtcRef.current = rtcManager;
+
+      rtcManager.onChannelStateChange = (isOpen) => {
+        if (isOpen) {
+          setConnectionType(rtcManager.connectionType);
+          showToast('WebRTC DataChannel Connected ⚡ (Ultra-Fast P2P Ready)', 'success');
+        }
+      };
+
+      // Handle WebRTC direct file reception
+      rtcManager.onProgress = (prog) => {
+        setIsReceiving(true);
+        setIsComplete(false);
+        setReceiveProgress(prog.percent);
+        setReceiveSpeed(prog.speed);
+        setCurrentFile(prog.fileName);
+        setConnectionType(prog.connectionType);
+      };
+
+      rtcManager.onFileReceived = (receivedFile) => {
+        setIsReceiving(false);
+        setIsComplete(true);
+
+        setReceivedFiles((prev) => {
+          const updated = [...prev, receivedFile];
+          return updated;
+        });
+
+        // Trigger immediate browser auto-download for WebRTC binary blob
+        triggerAutoDownload(receivedFile.url, receivedFile.originalName);
+        showToast(`${receivedFile.originalName} received & auto-downloaded ✓`, 'success');
+      };
 
       // Socket event listeners
       socket.on('session_state', (data) => {
@@ -137,10 +183,11 @@ export function ReceiverPage({ showToast, onReset }) {
 
         setReceivedFiles(allFiles);
 
-        // AUTOMATICALLY TRIGGER DOWNLOAD FOR INCOMING FILES!
-        triggerBatchAutoDownloads(res.sessionId, incomingFiles);
-
-        showToast(`${incomingFiles.length} file(s) received & auto-download started! ✓`, 'success');
+        // Fallback auto-download for HTTP transferred files
+        if (!rtcManager.isChannelOpen) {
+          triggerBatchAutoDownloads(res.sessionId, incomingFiles);
+          showToast(`${incomingFiles.length} file(s) received & auto-download started! ✓`, 'success');
+        }
       });
 
       setIsLoading(false);
@@ -243,8 +290,8 @@ export function ReceiverPage({ showToast, onReset }) {
                 width: '80px',
                 height: '80px',
                 borderRadius: '50%',
-                background: 'rgba(139, 92, 246, 0.15)',
-                color: 'var(--accent)',
+                background: 'rgba(255, 87, 34, 0.15)',
+                color: 'var(--primary)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -327,7 +374,7 @@ export function ReceiverPage({ showToast, onReset }) {
               <div className="pulse-dot" style={{ width: '20px', height: '20px', margin: '0 auto 20px auto', background: 'var(--primary)' }}></div>
               <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Waiting for Sender...</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                The Sender is currently selecting files to transfer. Files will appear here automatically.
+                The Sender is selecting files to move. WebRTC Peer-to-Peer file streaming will begin automatically.
               </p>
             </div>
           )}
