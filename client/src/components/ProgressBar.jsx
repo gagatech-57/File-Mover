@@ -2,9 +2,11 @@ import React from 'react';
 import { ArrowUpRight, ArrowDownLeft, Zap } from 'lucide-react';
 
 function formatSpeed(bytesPerSec) {
-  if (!bytesPerSec || bytesPerSec === 0) return '0.0 MB/s';
+  if (!bytesPerSec || bytesPerSec <= 0) return '0.0 MB/s';
   const mbPerSec = bytesPerSec / (1024 * 1024);
-  return `${mbPerSec.toFixed(1)} MB/s`;
+  if (mbPerSec >= 1) return `${mbPerSec.toFixed(1)} MB/s`;
+  const kbPerSec = bytesPerSec / 1024;
+  return `${kbPerSec.toFixed(0)} KB/s`;
 }
 
 export function ProgressBar({ percent = 0, currentFile = '', speed = 0, role = 'SENDER' }) {
@@ -12,11 +14,12 @@ export function ProgressBar({ percent = 0, currentFile = '', speed = 0, role = '
 
   return (
     <div style={{
-      background: 'rgba(15, 23, 42, 0.7)',
+      background: '#fffcf8',
       border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)',
       padding: '24px',
-      margin: '20px 0'
+      margin: '20px 0',
+      boxShadow: '0 8px 25px rgba(255, 87, 34, 0.06)'
     }}>
       <div style={{
         display: 'flex',
@@ -24,22 +27,22 @@ export function ProgressBar({ percent = 0, currentFile = '', speed = 0, role = '
         justifyContent: 'space-between',
         marginBottom: '16px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
+            width: '42px',
+            height: '42px',
             borderRadius: '50%',
-            background: isSender ? 'rgba(99, 102, 241, 0.2)' : 'rgba(6, 182, 212, 0.2)',
-            color: isSender ? 'var(--primary)' : 'var(--accent-cyan)',
+            background: 'rgba(255, 87, 34, 0.12)',
+            color: 'var(--primary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            {isSender ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}
+            {isSender ? <ArrowUpRight size={22} /> : <ArrowDownLeft size={22} />}
           </div>
           <div>
-            <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-              {isSender ? 'Sending Files...' : 'Receiving Files...'}
+            <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-main)' }}>
+              {isSender ? 'Moving Files...' : 'Receiving Files...'}
             </span>
             {currentFile && (
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -51,27 +54,28 @@ export function ProgressBar({ percent = 0, currentFile = '', speed = 0, role = '
 
         <div style={{ textAlign: 'right' }}>
           <div style={{
-            fontSize: '1.4rem',
+            fontSize: '1.6rem',
             fontWeight: 800,
-            color: isSender ? '#a5b4fc' : '#67e8f9',
+            color: '#d84315',
             fontFamily: 'var(--font-mono)'
           }}>
             {percent}%
           </div>
           <div style={{
-            fontSize: '0.8rem',
-            color: 'var(--text-dim)',
+            fontSize: '0.85rem',
+            color: 'var(--warning)',
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
             justifyContent: 'flex-end'
           }}>
-            <Zap size={12} color="var(--warning)" /> {formatSpeed(speed)}
+            <Zap size={14} color="var(--primary)" /> {formatSpeed(speed)}
           </div>
         </div>
       </div>
 
-      <div className="progress-container">
+      <div className="progress-container" style={{ margin: '12px 0 0 0' }}>
         <div className="progress-track">
           <div
             className="progress-fill"
